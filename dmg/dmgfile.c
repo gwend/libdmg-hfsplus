@@ -19,7 +19,7 @@ static void cacheRun(DMG* dmg, BLKXTable* blkx, int run) {
 	void* inBuffer;
 	int ret;
 	size_t have;
-        int bufferRead;
+	int bufferRead;
 	
 	if(dmg->runData) {
 		free(dmg->runData);
@@ -48,22 +48,15 @@ static void cacheRun(DMG* dmg, BLKXTable* blkx, int run) {
 			strm.opaque = Z_NULL;
 			strm.avail_in = 0;
 			strm.next_in = Z_NULL;
-			
 			ASSERT(inflateInit(&strm) == Z_OK, "inflateInit");
-			
 			ASSERT((strm.avail_in = dmg->dmg->read(dmg->dmg, inBuffer, blkx->runs[run].compLength)) == blkx->runs[run].compLength, "fread");
 			strm.next_in = (unsigned char*) inBuffer;
-			
-			do {
-				strm.avail_out = bufferSize;
-				strm.next_out = (unsigned char*) dmg->runData;
-				ASSERT((ret = inflate(&strm, Z_NO_FLUSH)) != Z_STREAM_ERROR, "inflate/Z_STREAM_ERROR");
-				if(ret != Z_OK && ret != Z_BUF_ERROR && ret != Z_STREAM_END) {
-					ASSERT(FALSE, "inflate");
-				}
-				have = bufferSize - strm.avail_out;
-			} while (strm.avail_out == 0);
-			
+            strm.avail_out = bufferSize;
+            strm.next_out = (unsigned char*) dmg->runData;
+            ret = inflate(&strm, Z_FINISH);
+            if(ret != Z_OK && ret != Z_BUF_ERROR && ret != Z_STREAM_END) {
+                ASSERT(FALSE, "inflate");
+            }
 			ASSERT(inflateEnd(&strm) == Z_OK, "inflateEnd");
 			break;
 		case BLOCK_RAW:
@@ -86,12 +79,10 @@ static void cacheRun(DMG* dmg, BLKXTable* blkx, int run) {
 			ASSERT(BZ2_bzDecompressInit(&bzstrm, 0, 0) == BZ_OK, "BZ2_bzDecompressInit");
 			ASSERT((bzstrm.avail_in = dmg->dmg->read(dmg->dmg, inBuffer, blkx->runs[run].compLength)) == blkx->runs[run].compLength, "fread");
 			bzstrm.next_in = (char*)inBuffer;
-			do {
-				bzstrm.avail_out = bufferSize;
-				bzstrm.next_out = (char*) dmg->runData;
-				ASSERT((ret = BZ2_bzDecompress(&bzstrm)) >= 0, "BZ2_bzDecompress");
-				have = bufferSize - bzstrm.avail_out;
-			} while (strm.avail_out == 0);
+            bzstrm.avail_out = bufferSize;
+            bzstrm.next_out = (char*) dmg->runData;
+            ret = BZ2_bzDecompress(&bzstrm);
+            ASSERT(ret == BZ_STREAM_END, "BZ2_bzDecompress");
 			ASSERT(BZ2_bzDecompressEnd(&bzstrm) == BZ_OK, "BZ2_bzDecompressEnd");
 			break;
 		default:
@@ -110,7 +101,7 @@ static void cacheOffset(DMG* dmg, off_t location) {
 	int i;
 	int j;
 	uint64_t sector;
-	
+
 	sector = (uint64_t)(location / SECTOR_SIZE);
 
 	for(i = 0; i < dmg->numBLKX; i++) {
